@@ -391,22 +391,29 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
         self.state = None
         self.Elogbeta = None
 
-    def inference(self, chunk, collect_sstats=False):
-        """
-        Given a chunk of sparse document vectors, estimate gamma (parameters
-        controlling the topic weights) for each document in the chunk.
+    def inference(self, chunk, collect_sstats=False, deterministic=False):
+        """Given a chunk of sparse document vectors, estimate gamma (parameters controlling the topic weights)
+        for each document in the chunk.
 
-        This function does not modify the model (=is read-only aka const). The
-        whole input chunk of document is assumed to fit in RAM; chunking of a
-        large corpus must be done earlier in the pipeline.
+        This function does not modify the model The whole input chunk of document is assumed to fit in RAM;
+        chunking of a large corpus must be done earlier in the pipeline. Avoids computing the `phi` variational
+        parameter directly using the optimization presented in
+        `Lee, Seung: Algorithms for non-negative matrix factorization"
+        <https://papers.nips.cc/paper/1861-algorithms-for-non-negative-matrix-factorization.pdf>`_.
 
-        If `collect_sstats` is True, also collect sufficient statistics needed
-        to update the model's topic-word distributions, and return a 2-tuple
-        `(gamma, sstats)`. Otherwise, return `(gamma, None)`. `gamma` is of shape
-        `len(chunk) x self.num_topics`.
+        Parameters
+        ----------
+        chunk : {list of list of (int, float), scipy.sparse.csc}
+            The corpus chunk on which the inference step will be performed.
+        collect_sstats : bool, optional
+            If set to True, also collect (and return) sufficient statistics needed to update the model's topic-word
+            distributions.
 
-        Avoids computing the `phi` variational parameter directly using the
-        optimization presented in **Lee, Seung: Algorithms for non-negative matrix factorization, NIPS 2001**.
+        Returns
+        -------
+        (numpy.ndarray, {numpy.ndarray, None})
+            The first element is always returned and it corresponds to the states gamma matrix. The second element is
+            only returned if `collect_sstats` == True and corresponds to the sufficient statistics for the M step.
 
         """
         try:
@@ -418,7 +425,10 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
             logger.debug("performing inference on a chunk of %i documents", len(chunk))
 
         # Initialize the variational distribution q(theta|gamma) for the chunk
-        gamma = self.random_state.gamma(100., 1. / 100., (len(chunk), self.num_topics))
+        if deterministic == True:
+            gamma = np.ones((len(chunk), self.num_topics))
+        else:
+            gamma = self.random_state.gamma(100., 1. / 100., (len(chunk), self.num_topics))
         Elogtheta = dirichlet_expectation(gamma)
         expElogtheta = np.exp(Elogtheta)
         if collect_sstats:
@@ -907,23 +917,33 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
         return sorted(scored_topics, key=lambda tup: tup[1], reverse=True)
 
     def get_document_topics(self, bow, minimum_probability=None, minimum_phi_value=None,
-                            per_word_topics=False):
-        """
-        Args:
-            bow (list): Bag-of-words representation of the document to get topics for.
-            minimum_probability (float): Ignore topics with probability below this value
-                (None by default). If set to None, a value of 1e-8 is used to prevent 0s.
-            per_word_topics (bool): If True, also returns a list of topics, sorted in
-                descending order of most likely topics for that word. It also returns a list
-                of word_ids and each words corresponding topics' phi_values, multiplied by
-                feature length (i.e, word count).
-            minimum_phi_value (float): if `per_word_topics` is True, this represents a lower
-                bound on the term probabilities that are included (None by default). If set
-                to None, a value of 1e-8 is used to prevent 0s.
+                            per_word_topics=False, deterministic=False):
+        """Get the topic distribution for the given document.
 
-        Returns:
-            topic distribution for the given document `bow`, as a list of
-            `(topic_id, topic_probability)` 2-tuples.
+        Parameters
+        ----------
+        bow : corpus : list of (int, float)
+            The document in BOW format.
+        minimum_probability : float
+            Topics with an assigned probability lower than this threshold will be discarded.
+        minimum_phi_value : float
+            If `per_word_topics` is True, this represents a lower bound on the term probabilities that are included.
+             If set to None, a value of 1e-8 is used to prevent 0s.
+        per_word_topics : bool
+            If True, this function will also return two extra lists as explained in the "Returns" section.
+
+        Returns
+        -------
+        list of (int, float)
+            Topic distribution for the whole document. Each element in the list is a pair of a topic's id, and
+            the probability that was assigned to it.
+        list of (int, list of (int, float), optional
+            Most probable topics per word. Each element in the list is a pair of a word's id, and a list of
+            topics sorted by their relevance to this word. Only returned if `per_word_topics` was set to True.
+        list of (int, list of float), optional
+            Phi relevance values, multiplied by the feature length, for each word-topic combination.
+            Each element in the list is a pair of a word's id and a list of the phi values between this word and
+            each topic. Only returned if `per_word_topics` was set to True.
         """
         if minimum_probability is None:
             minimum_probability = self.minimum_probability
@@ -943,7 +963,7 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
             )
             return self._apply(corpus, **kwargs)
 
-        gamma, phis = self.inference([bow], collect_sstats=per_word_topics)
+        gamma, phis = self.inference([bow], collect_sstats=per_word_topics, deterministic=deterministic)
         topic_dist = gamma[0] / sum(gamma[0])  # normalize distribution
 
         document_topics = [
@@ -1102,7 +1122,7 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
             topic distribution for the given document `bow`, as a list of
             `(topic_id, topic_probability)` 2-tuples.
         """
-        return self.get_document_topics(bow, eps, self.minimum_phi_value, self.per_word_topics)
+        return self.get_document_topics(bow, eps, self.minimum_phi_value, self.per_word_topics, deterministic=True)
 
     def save(self, fname, ignore=('state', 'dispatcher'), separately=None, *args, **kwargs):
         """
