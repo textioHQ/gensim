@@ -639,11 +639,11 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
         self.state = None
         self.Elogbeta = None
 
-    def inference(self, chunk, collect_sstats=False):
+    def inference(self, chunk, collect_sstats=False, deterministic=False):
         """Given a chunk of sparse document vectors, estimate gamma (parameters controlling the topic weights)
         for each document in the chunk.
 
-        This function does not modify the model. The whole input chunk of document is assumed to fit in RAM;
+        This function does not modify the model The whole input chunk of document is assumed to fit in RAM;
         chunking of a large corpus must be done earlier in the pipeline. Avoids computing the `phi` variational
         parameter directly using the optimization presented in
         `Lee, Seung: Algorithms for non-negative matrix factorization"
@@ -651,7 +651,7 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
 
         Parameters
         ----------
-        chunk : list of list of (int, float)
+        chunk : {list of list of (int, float), scipy.sparse.csc}
             The corpus chunk on which the inference step will be performed.
         collect_sstats : bool, optional
             If set to True, also collect (and return) sufficient statistics needed to update the model's topic-word
@@ -673,7 +673,10 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
             logger.debug("performing inference on a chunk of %i documents", len(chunk))
 
         # Initialize the variational distribution q(theta|gamma) for the chunk
-        gamma = self.random_state.gamma(100., 1. / 100., (len(chunk), self.num_topics)).astype(self.dtype, copy=False)
+        if deterministic == True:
+            gamma = np.ones((len(chunk), self.num_topics))
+        else:
+            gamma = self.random_state.gamma(100., 1. / 100., (len(chunk), self.num_topics))
         Elogtheta = dirichlet_expectation(gamma)
         expElogtheta = np.exp(Elogtheta)
 
@@ -1304,6 +1307,7 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
 
     def get_document_topics(self, bow, minimum_probability=None, minimum_phi_value=None,
                             per_word_topics=False):
+                            per_word_topics=False, deterministic=False):
         """Get the topic distribution for the given document.
 
         Parameters
@@ -1350,7 +1354,7 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
             )
             return self._apply(corpus, **kwargs)
 
-        gamma, phis = self.inference([bow], collect_sstats=per_word_topics)
+        gamma, phis = self.inference([bow], collect_sstats=per_word_topics, deterministic=deterministic)
         topic_dist = gamma[0] / sum(gamma[0])  # normalize distribution
 
         document_topics = [
@@ -1545,7 +1549,7 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
             assigned to it.
 
         """
-        return self.get_document_topics(bow, eps, self.minimum_phi_value, self.per_word_topics)
+        return self.get_document_topics(bow, eps, self.minimum_phi_value, self.per_word_topics, deterministic=True)
 
     def save(self, fname, ignore=('state', 'dispatcher'), separately=None, *args, **kwargs):
         """Save the model to a file.
