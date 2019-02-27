@@ -1,0 +1,6 @@
+# Requirements for dev
+awscli~=1.11
+
+# Private
+pypi-s3-upload~=1.2
+pytest==4.3.0

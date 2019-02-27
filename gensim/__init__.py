@@ -6,7 +6,7 @@ similarities within a corpus of documents.
 from gensim import parsing, matutils, interfaces, corpora, models, similarities, summarization, utils  # noqa:F401
 import logging
 
-__version__ = '3.1.0'
+__version__ = '3.1.9991'
 
 
 class NullHandler(logging.Handler):
