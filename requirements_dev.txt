@@ -3,4 +3,4 @@ awscli~=1.11
 
 # Private
 pypi-s3-upload~=1.2
-pytest
+pytest==4.3.0
