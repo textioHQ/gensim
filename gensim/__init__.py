@@ -1,10 +1,9 @@
 """
 This package contains functionality to transform documents (strings) into vectors, and calculate
 similarities between documents.
-
 """
 
-__version__ = '4.1.1'
+__version__ = '4.1.9991'
 
 import logging
 
