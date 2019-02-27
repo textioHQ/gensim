@@ -8,7 +8,6 @@ syspython := python3
 
 python := venv/bin/python
 pip := venv/bin/pip-s3
-aws := venv/bin/aws
 
 help:
 	@echo
@@ -57,7 +56,7 @@ venv:
 .venv: venv
 	venv/bin/pip install --upgrade pip wheel setuptools
 	venv/bin/pip install "awscli"
-	$(aws) s3 cp s3://textio-pypi-us-west-2/pypi/0/dev/pips3/pips3-master.tar.gz .
+	aws s3 cp s3://textio-pypi-us-west-2/pypi/0/dev/pips3/pips3-master.tar.gz .
 	venv/bin/pip install pips3-master.tar.gz
 	rm -f pips3-master.tar.gz
 	touch .venv
