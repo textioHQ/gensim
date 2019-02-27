@@ -237,7 +237,7 @@ test_env = [
 
 setup(
     name='gensim',
-    version='3.1.0',
+    version='3.1.9991',
     description='Python framework for fast Vector Space Modelling',
     long_description=LONG_DESCRIPTION,
 
