@@ -1306,7 +1306,6 @@ class LdaModel(interfaces.TransformationABC, basemodel.BaseTopicModel):
         return sorted(scored_topics, key=lambda tup: tup[1], reverse=True)
 
     def get_document_topics(self, bow, minimum_probability=None, minimum_phi_value=None,
-                            per_word_topics=False):
                             per_word_topics=False, deterministic=False):
         """Get the topic distribution for the given document.
 
